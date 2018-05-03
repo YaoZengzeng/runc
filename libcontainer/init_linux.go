@@ -46,6 +46,7 @@ type network struct {
 }
 
 // initConfig is used for transferring parameters from Exec() to Init()
+// initConfig用于将参数从Exec()转换到Init()
 type initConfig struct {
 	Args             []string              `json:"args"`
 	Env              []string              `json:"env"`
@@ -73,6 +74,7 @@ type initer interface {
 
 func newContainerInit(t initType, pipe *os.File, consoleSocket *os.File, fifoFd int) (initer, error) {
 	var config *initConfig
+	// 从管道中读取config
 	if err := json.NewDecoder(pipe).Decode(&config); err != nil {
 		return nil, err
 	}
@@ -90,6 +92,7 @@ func newContainerInit(t initType, pipe *os.File, consoleSocket *os.File, fifoFd 
 		return &linuxStandardInit{
 			pipe:          pipe,
 			consoleSocket: consoleSocket,
+			// 父进程的pid
 			parentPid:     unix.Getppid(),
 			config:        config,
 			fifoFd:        fifoFd,
@@ -100,6 +103,7 @@ func newContainerInit(t initType, pipe *os.File, consoleSocket *os.File, fifoFd 
 
 // populateProcessEnvironment loads the provided environment variables into the
 // current processes's environment.
+// populateProcessEnvironment将提供的环境变量加载到当前进程的环境变量中
 func populateProcessEnvironment(env []string) error {
 	for _, pair := range env {
 		p := strings.SplitN(pair, "=", 2)
@@ -116,10 +120,14 @@ func populateProcessEnvironment(env []string) error {
 // finalizeNamespace drops the caps, sets the correct user
 // and working dir, and closes any leaked file descriptors
 // before executing the command inside the namespace
+// finalizeNamespace丢弃caps, 设置正确的user以及工作目录，并且关闭
+// 任何泄露的文件描述符，在namespace内执行命令以前
 func finalizeNamespace(config *initConfig) error {
 	// Ensure that all unwanted fds we may have accidentally
 	// inherited are marked close-on-exec so they stay out of the
 	// container
+	// 将所有我们不需要的但是又偶然继承的文件描述符都被标记为close-on-exec
+	// 这样它们就不会进入容器内了
 	if err := utils.CloseExecFrom(config.PassedFilesCount + 3); err != nil {
 		return err
 	}
@@ -135,19 +143,23 @@ func finalizeNamespace(config *initConfig) error {
 		return err
 	}
 	// drop capabilities in bounding set before changing user
+	// 在改变user之前，丢弃bounding set里的capabilities
 	if err := w.ApplyBoundingSet(); err != nil {
 		return err
 	}
 	// preserve existing capabilities while we change users
+	// 在改变user之前，保留已经存在的capabilities
 	if err := system.SetKeepCaps(); err != nil {
 		return err
 	}
+	// 对user进行设置
 	if err := setupUser(config); err != nil {
 		return err
 	}
 	if err := system.ClearKeepCaps(); err != nil {
 		return err
 	}
+	// 添加cap
 	if err := w.ApplyCaps(); err != nil {
 		return err
 	}
@@ -210,13 +222,17 @@ func setupConsole(socket *os.File, config *initConfig, mount bool) error {
 // syncParentReady sends to the given pipe a JSON payload which indicates that
 // the init is ready to Exec the child process. It then waits for the parent to
 // indicate that it is cleared to Exec.
+// syncParentReady发送给给定的管道一个JSON payload，告诉父进程init已经准备好Exec子进程了
+// 之后它会等待父进程告诉它可以Exec了
 func syncParentReady(pipe io.ReadWriter) error {
 	// Tell parent.
+	// 先发送给父进程一个procReady
 	if err := writeSync(pipe, procReady); err != nil {
 		return err
 	}
 
 	// Wait for parent to give the all-clear.
+	// 再等待从父进程中读取procRun
 	if err := readSync(pipe, procRun); err != nil {
 		return err
 	}
@@ -229,11 +245,13 @@ func syncParentReady(pipe io.ReadWriter) error {
 // indicate that it is cleared to resume.
 func syncParentHooks(pipe io.ReadWriter) error {
 	// Tell parent.
+	// 告诉父进程执行hooks
 	if err := writeSync(pipe, procHooks); err != nil {
 		return err
 	}
 
 	// Wait for parent to give the all-clear.
+	// 等待父进程执行结束，发送回procResume
 	if err := readSync(pipe, procResume); err != nil {
 		return err
 	}
@@ -242,6 +260,7 @@ func syncParentHooks(pipe io.ReadWriter) error {
 }
 
 // setupUser changes the groups, gid, and uid for the user inside the container
+// setupUser改变容器内部的groups, gid以及user的uid
 func setupUser(config *initConfig) error {
 	// Set up defaults.
 	defaultExecUser := user.ExecUser{

@@ -17,6 +17,7 @@ import (
 
 // linuxSetnsInit performs the container's initialization for running a new process
 // inside an existing container.
+// linuxSetnsInit负责在一个已经存在的容器里运行一个新的进程的初始化工作
 type linuxSetnsInit struct {
 	pipe          *os.File
 	consoleSocket *os.File

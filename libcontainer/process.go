@@ -17,6 +17,7 @@ type processOperations interface {
 
 // Process specifies the configuration and IO for a process inside
 // a container.
+// Process指定了容器中一个进程的配置以及IO
 type Process struct {
 	// The command to be run followed by any arguments.
 	Args []string
@@ -26,6 +27,7 @@ type Process struct {
 
 	// User will set the uid and gid of the executing process running inside the container
 	// local to the container's user and group configuration.
+	// User会设置容器中运行的进程的uid以及gid，基于容器的user以及group配置
 	User string
 
 	// AdditionalGroups specifies the gids that should be added to supplementary groups
@@ -45,9 +47,11 @@ type Process struct {
 	Stderr io.Writer
 
 	// ExtraFiles specifies additional open files to be inherited by the container
+	// ExtraFiles指定了容器继承的额外的open files
 	ExtraFiles []*os.File
 
 	// Initial sizings for the console
+	// console的初始大小
 	ConsoleWidth  uint16
 	ConsoleHeight uint16
 
@@ -70,8 +74,10 @@ type Process struct {
 	Rlimits []configs.Rlimit
 
 	// ConsoleSocket provides the masterfd console.
+	// ConsoleSocket提供了masterfd console
 	ConsoleSocket *os.File
 
+	// 进程相关的一些接口，例如wait(), signal(), pid()等等
 	ops processOperations
 }
 

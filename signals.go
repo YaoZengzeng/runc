@@ -21,6 +21,10 @@ const signalBufferSize = 2048
 // while still forwarding all other signals to the process.
 // If notifySocket is present, use it to read systemd notifications from the container and
 // forward them to notifySocketHost.
+// newSignalHandler返回一个signal handler用于处理SIGCHLD以及SIGWINCH信号
+// 同时其他信号还是转发到进程
+// 如果notifySocket存在，用它来读取来自容器的systemd notifications
+// 并且将它们转发到notifySocketHost
 func newSignalHandler(enableSubreaper bool, notifySocket *notifySocket) *signalHandler {
 	if enableSubreaper {
 		// set us as the subreaper before registering the signal handler for the container
@@ -30,6 +34,8 @@ func newSignalHandler(enableSubreaper bool, notifySocket *notifySocket) *signalH
 	}
 	// ensure that we have a large buffer size so that we do not miss any signals
 	// incase we are not processing them fast enough.
+	// 确保我们有一个足够大的buffer，这样我们就不会遗漏任何signals
+	// 假如我们的处理速度不够快的话
 	s := make(chan os.Signal, signalBufferSize)
 	// handle all signals for the process.
 	signal.Notify(s)
@@ -53,6 +59,7 @@ type signalHandler struct {
 
 // forward handles the main signal event loop forwarding, resizing, or reaping depending
 // on the signal received.
+// forward根据接收到的signal来处理main signal event loop的forwarding, resizing以及reaping
 func (h *signalHandler) forward(process *libcontainer.Process, tty *tty, detach bool) (int, error) {
 	// make sure we know the pid of our main process so that we can return
 	// after it dies.

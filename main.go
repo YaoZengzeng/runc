@@ -28,14 +28,22 @@ runc is a command line client for running applications packaged according to
 the Open Container Initiative (OCI) format and is a compliant implementation of the
 Open Container Initiative specification.
 
+runc是一个命令行工具，用于运行根据OCI标准格式打包的应用并且兼容OCI标准
+
 runc integrates well with existing process supervisors to provide a production
 container runtime environment for applications. It can be used with your
 existing process monitoring tools and the container will be spawned as a
 direct child of the process supervisor.
 
+runc能为应用提供一个生产级别的容器运行时环境，并且和已有的process supervisor兼容地很好
+它能够和你已有的进程监控工具配合使用并且容器会直接作为process supervisor的子进程生成
+
 Containers are configured using bundles. A bundle for a container is a directory
 that includes a specification file named "` + specConfig + `" and a root filesystem.
 The root filesystem contains the contents of the container.
+
+容器通常都通过bundle进行配置，容器的bundle是一个包含名字为config.json的特殊文件以及一个根文件系统的
+目录。根文件系统中包含了容器的所有内容
 
 To start a new instance of a container:
 
@@ -44,7 +52,9 @@ To start a new instance of a container:
 Where "<container-id>" is your name for the instance of the container that you
 are starting. The name you provide for the container instance must be unique on
 your host. Providing the bundle directory using "-b" is optional. The default
-value for "bundle" is the current directory.`
+value for "bundle" is the current directory.
+容器名必须在当前主机上唯一，默认的bundle为当前目录
+`
 )
 
 func main() {
@@ -88,6 +98,7 @@ func main() {
 		cli.StringFlag{
 			Name:  "root",
 			Value: root,
+			// 存放容器状态的根目录（它应该位于tmpfs中）
 			Usage: "root directory for storage of container state (this should be located in tmpfs)",
 		},
 		cli.StringFlag{
@@ -97,6 +108,8 @@ func main() {
 		},
 		cli.BoolFlag{
 			Name:  "systemd-cgroup",
+			// 启动systemd cgroup support
+			// 期望的cgroupsPath为"slice:prefix:name"的形式，比如"system.slice:runc:434234"
 			Usage: "enable systemd cgroup support, expects cgroupsPath to be of form \"slice:prefix:name\" for e.g. \"system.slice:runc:434234\"",
 		},
 	}

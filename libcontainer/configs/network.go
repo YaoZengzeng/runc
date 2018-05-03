@@ -6,6 +6,7 @@ package configs
 // container to be setup with the host's networking stack
 type Network struct {
 	// Type sets the networks type, commonly veth and loopback
+	// 一般为veth或者loopback
 	Type string `json:"type"`
 
 	// Name of the network interface
@@ -45,6 +46,7 @@ type Network struct {
 
 	// HairpinMode specifies if hairpin NAT should be enabled on the virtual interface
 	// bridge port in the case of type veth
+	// 是否开启hairpin NAT
 	// Note: This is unsupported on some systems.
 	// Note: This does not apply to loopback interfaces.
 	HairpinMode bool `json:"hairpin_mode"`

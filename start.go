@@ -10,6 +10,7 @@ import (
 
 var startCommand = cli.Command{
 	Name:  "start",
+	// 在一个已经创建的容器里执行用户定义的进程
 	Usage: "executes the user defined process in a created container",
 	ArgsUsage: `<container-id>
 
@@ -30,6 +31,7 @@ your host.`,
 			return err
 		}
 		switch status {
+		// 对于一个已经处于Created状态的容器，执行Exec
 		case libcontainer.Created:
 			return container.Exec()
 		case libcontainer.Stopped:

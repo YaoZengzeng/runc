@@ -20,8 +20,10 @@ filesystem.
 
 The specification file includes an args parameter. The args parameter is used
 to specify command(s) that get run when the container is started. To change the
-command(s) that get executed on start, edit the args parameter of the spec. See
-"runc spec --help" for more explanation.`,
+command(s) that get executed on start, edit the args parameter of the spec. 
+specification file包含了一个args参数，参数args指定了容器启动时运行的命令，如果想改变容器运行时的命令
+修改spec中的args参数
+See "runc spec --help" for more explanation.`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "bundle, b",
@@ -31,6 +33,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		cli.StringFlag{
 			Name:  "console-socket",
 			Value: "",
+			// 指向一个AF_UNIX socket的路径，能够从中接收到一个文件描述符用于引用console的pseudoterminal的master end
 			Usage: "path to an AF_UNIX socket which will receive a file descriptor referencing the master end of the console's pseudoterminal",
 		},
 		cli.StringFlag{
@@ -48,6 +51,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		},
 		cli.IntFlag{
 			Name:  "preserve-fds",
+			// 传递额外的N个文件描述符至容器（总共stdio + $LISTEN_FDS + N）
 			Usage: "Pass N additional file descriptors to the container (stdio + $LISTEN_FDS + N in total)",
 		},
 	},
@@ -68,6 +72,8 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		}
 		// exit with the container's exit status so any external supervisor is
 		// notified of the exit with the correct exit status.
+		// 用容器的exit status退出，这样任何external supervisor都会获取容器退出的消息
+		// 并且知道正确的exit status
 		os.Exit(status)
 		return nil
 	},

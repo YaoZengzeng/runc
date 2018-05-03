@@ -143,7 +143,9 @@ var allowedDevices = []*configs.Device{
 }
 
 type CreateOpts struct {
+	// Cgroup的名字就是容器ID
 	CgroupName       string
+	// 是否使用systemd cgroup
 	UseSystemdCgroup bool
 	NoPivotRoot      bool
 	NoNewKeyring     bool
@@ -153,8 +155,11 @@ type CreateOpts struct {
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
 // given specification and a cgroup name
+// CreateLibcontainerConfig根据一个给定的spec以及一个cgroup name创建一个新的libcontainer
+// configuration
 func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 	// runc's cwd will always be the bundle path
+	// runc的cwd必须为bundle所在的目录
 	rcwd, err := os.Getwd()
 	if err != nil {
 		return nil, err
@@ -172,6 +177,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		rootfsPath = filepath.Join(cwd, rootfsPath)
 	}
 	labels := []string{}
+	// 将annotations转换为labels
 	for k, v := range spec.Annotations {
 		labels = append(labels, fmt.Sprintf("%s=%s", k, v))
 	}
@@ -180,6 +186,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		NoPivotRoot:  opts.NoPivotRoot,
 		Readonlyfs:   spec.Root.Readonly,
 		Hostname:     spec.Hostname,
+		// 在label中指定bundle的路径
 		Labels:       append(labels, fmt.Sprintf("bundle=%s", cwd)),
 		NoNewKeyring: opts.NoNewKeyring,
 		Rootless:     opts.Rootless,
@@ -198,6 +205,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 	}
 	config.Cgroups = c
 	// set linux-specific config
+	// linux平台特定的配置
 	if spec.Linux != nil {
 		if config.RootPropagation, exists = mountPropagationMapping[spec.Linux.RootfsPropagation]; !exists {
 			return nil, fmt.Errorf("rootfsPropagation=%v is not supported", spec.Linux.RootfsPropagation)
@@ -217,6 +225,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 			config.Namespaces.Add(t, ns.Path)
 		}
 		if config.Namespaces.Contains(configs.NEWNET) {
+			// 配置了network namespace，则添加一张loopback网卡
 			config.Networks = []*configs.Network{
 				{
 					Type: "loopback",
@@ -224,6 +233,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 			}
 		}
 		if config.Namespaces.Contains(configs.NEWUSER) {
+			// 创建user namespace
 			if err := setupUserNamespace(spec, config); err != nil {
 				return nil, err
 			}
@@ -267,6 +277,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 }
 
 func createLibcontainerMount(cwd string, m specs.Mount) *configs.Mount {
+	// 多数字段都从mount option中解析而来
 	flags, pgflags, data, ext := parseMountOptions(m.Options)
 	source := m.Source
 	if m.Type == "bind" {
@@ -301,6 +312,7 @@ func createCgroupConfig(opts *CreateOpts) (*configs.Cgroup, error) {
 	if spec.Linux != nil && spec.Linux.CgroupsPath != "" {
 		myCgroupPath = libcontainerUtils.CleanPath(spec.Linux.CgroupsPath)
 		if useSystemdCgroup {
+			// 如果使用了systemd cgroup，则直接赋值为spec.Linux.CgroupsPath
 			myCgroupPath = spec.Linux.CgroupsPath
 		}
 	}
@@ -331,6 +343,8 @@ func createCgroupConfig(opts *CreateOpts) (*configs.Cgroup, error) {
 	// In rootless containers, any attempt to make cgroup changes will fail.
 	// libcontainer will validate this and we shouldn't add any cgroup options
 	// the user didn't specify.
+	// 在rootless容器中，任何想要改变cgroup的尝试都会失败
+	// libcontainer会对它进行检查，我们不应该添加任何用户未指定的cgroup options
 	if !opts.Rootless {
 		c.Resources.AllowedDevices = allowedDevices
 	}
@@ -339,6 +353,7 @@ func createCgroupConfig(opts *CreateOpts) (*configs.Cgroup, error) {
 		if r == nil {
 			return c, nil
 		}
+		// 添加一系列的资源限制
 		for i, d := range spec.Linux.Resources.Devices {
 			var (
 				t     = "a"
@@ -523,6 +538,7 @@ func stringToDeviceRune(s string) (rune, error) {
 
 func createDevices(spec *specs.Spec, config *configs.Config) error {
 	// add whitelisted devices
+	// 默认的device
 	config.Devices = []*configs.Device{
 		{
 			Type:     'c',
@@ -580,6 +596,7 @@ func createDevices(spec *specs.Spec, config *configs.Config) error {
 		},
 	}
 	// merge in additional devices from the spec
+	// 添加spec中额外的设备
 	if spec.Linux != nil {
 		for _, d := range spec.Linux.Devices {
 			var uid, gid uint32
@@ -696,6 +713,7 @@ func parseMountOptions(options []string) (int, []int, string, int) {
 		"shared":      unix.MS_SHARED,
 		"slave":       unix.MS_SLAVE,
 		"unbindable":  unix.MS_UNBINDABLE,
+		// 前缀有r，就多一个MS_RES
 		"rprivate":    unix.MS_PRIVATE | unix.MS_REC,
 		"rshared":     unix.MS_SHARED | unix.MS_REC,
 		"rslave":      unix.MS_SLAVE | unix.MS_REC,
@@ -804,6 +822,7 @@ func createHooks(rspec *specs.Spec, config *configs.Config) {
 	if rspec.Hooks != nil {
 
 		for _, h := range rspec.Hooks.Prestart {
+			// 根据hook的配置创建Command
 			cmd := createCommandHook(h)
 			config.Hooks.Prestart = append(config.Hooks.Prestart, configs.NewCommandHook(cmd))
 		}

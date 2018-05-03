@@ -54,7 +54,9 @@ func Current() Console {
 }
 
 // ConsoleFromFile returns a console using the provided file
+// ConsoleFromFile根据一个给定的file返回一个console
 func ConsoleFromFile(f *os.File) (Console, error) {
+	// 检查给定的文件是否为console
 	if err := checkConsole(f); err != nil {
 		return nil, err
 	}

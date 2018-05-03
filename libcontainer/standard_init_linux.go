@@ -57,9 +57,11 @@ func (l *linuxStandardInit) Init() error {
 		}
 	}
 
+	// 配置network
 	if err := setupNetwork(l.config); err != nil {
 		return err
 	}
+	// 配置路由
 	if err := setupRoute(l.config.Config); err != nil {
 		return err
 	}
@@ -71,6 +73,7 @@ func (l *linuxStandardInit) Init() error {
 	// Set up the console. This has to be done *before* we finalize the rootfs,
 	// but *after* we've given the user the chance to set up all of the mounts
 	// they wanted.
+	// 设置console，这必须在我们已经finalize rootfs之前并且在用户有机会挂载它们想要的mount之后
 	if l.config.CreateConsole {
 		if err := setupConsole(l.consoleSocket, l.config, true); err != nil {
 			return err
@@ -81,7 +84,9 @@ func (l *linuxStandardInit) Init() error {
 	}
 
 	// Finish the rootfs setup.
+	// 结束rootfs的设置
 	if l.config.Config.Namespaces.Contains(configs.NEWNS) {
+		// 如果设置了新的mount namespace
 		if err := finalizeRootfs(l.config.Config); err != nil {
 			return err
 		}
@@ -100,10 +105,12 @@ func (l *linuxStandardInit) Init() error {
 	}
 
 	for key, value := range l.config.Config.Sysctl {
+		// 对"/proc/sys"的某些文件进行配置
 		if err := writeSystemProperty(key, value); err != nil {
 			return err
 		}
 	}
+	// 设置readonly path
 	for _, path := range l.config.Config.ReadonlyPaths {
 		if err := readonlyPath(path); err != nil {
 			return err
@@ -126,6 +133,8 @@ func (l *linuxStandardInit) Init() error {
 	// Tell our parent that we're ready to Execv. This must be done before the
 	// Seccomp rules have been applied, because we need to be able to read and
 	// write to a socket.
+	// 告诉父进程我们已经准备好Execv了
+	// 这必须在Seccomp规则被应用之前完成，因为我们需要对socket进行读写
 	if err := syncParentReady(l.pipe); err != nil {
 		return err
 	}
@@ -159,15 +168,19 @@ func (l *linuxStandardInit) Init() error {
 		return err
 	}
 	// Close the pipe to signal that we have completed our init.
+	// 关闭管道，表示我们已经完成了init
 	l.pipe.Close()
 	// Wait for the FIFO to be opened on the other side before exec-ing the
 	// user process. We open it through /proc/self/fd/$fd, because the fd that
 	// was given to us was an O_PATH fd to the fifo itself. Linux allows us to
 	// re-open an O_PATH fd through /proc.
+	// 在exec用户进程之前等待FIFO在另一端被打开
+	// 我们通过/proc/self/fd/$fd打开它
 	fd, err := unix.Open(fmt.Sprintf("/proc/self/fd/%d", l.fifoFd), unix.O_WRONLY|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return newSystemErrorWithCause(err, "open exec fifo")
 	}
+	// 向exec管道写数据，阻塞，直到用户调用`runc start`，读取管道中的数据
 	if _, err := unix.Write(fd, []byte("0")); err != nil {
 		return newSystemErrorWithCause(err, "write 0 exec fifo")
 	}
@@ -186,6 +199,7 @@ func (l *linuxStandardInit) Init() error {
 			return newSystemErrorWithCause(err, "init seccomp")
 		}
 	}
+	// 调用exec命令，执行用户进程
 	if err := syscall.Exec(name, l.config.Args[0:], os.Environ()); err != nil {
 		return newSystemErrorWithCause(err, "exec user process")
 	}

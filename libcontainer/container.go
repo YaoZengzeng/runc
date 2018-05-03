@@ -150,9 +150,11 @@ type BaseContainer interface {
 	Destroy() error
 
 	// Signal sends the provided signal code to the container's initial process.
+	// Signal将signal发送到容器的initial process
 	//
 	// If all is specified the signal is sent to all processes in the container
 	// including the initial process.
+	// 如果指定了all，signal就会发送给容器中的所有进程，包括initial process
 	//
 	// errors:
 	// SystemError - System error.

@@ -19,6 +19,8 @@ var namespaceInfo = map[NamespaceType]int{
 
 // CloneFlags parses the container's Namespaces options to set the correct
 // flags on clone, unshare. This function returns flags only for new namespaces.
+// CloneFlags解析容器的Namespaces选项，从而能够正确设置clone, unshare这两个函数的flag
+// 本函数只返回新的namespace的flag
 func (n *Namespaces) CloneFlags() uintptr {
 	var flag int
 	for _, v := range *n {

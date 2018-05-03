@@ -56,6 +56,7 @@ func fatal(err error) {
 func setupSpec(context *cli.Context) (*specs.Spec, error) {
 	bundle := context.String("bundle")
 	if bundle != "" {
+		// 将当前工作目录转换到bundle
 		if err := os.Chdir(bundle); err != nil {
 			return nil, err
 		}
@@ -75,6 +76,7 @@ func revisePidFile(context *cli.Context) error {
 
 	// convert pid-file to an absolute path so we can write to the right
 	// file after chdir to bundle
+	// 将pid-file转换为绝对路径，从而在我们chdir到bundle之后也能写到正确的文件中
 	pidFile, err := filepath.Abs(pidFile)
 	if err != nil {
 		return err

@@ -79,10 +79,13 @@ type State struct {
 }
 
 // Container is a libcontainer container object.
+// Container是一个libcontainer container对象
 //
 // Each container is thread-safe within the same process. Since a container can
 // be destroyed by a separate process, any function may return that the container
 // was not found.
+// 在同一个进程中，每个进程都是线程安全的，因为每个容器都能被另一个容器摧毁
+// 因此任何一个函数都可能返回容器找不到
 type Container interface {
 	BaseContainer
 
@@ -225,17 +228,20 @@ func (c *linuxContainer) Set(config configs.Config) error {
 func (c *linuxContainer) Start(process *Process) error {
 	c.m.Lock()
 	defer c.m.Unlock()
+	// 获取容器当前状态
 	status, err := c.currentStatus()
 	if err != nil {
 		return err
 	}
 	if status == Stopped {
+		// 如果容器的状态为Stopped，则先创建exec fifo
 		if err := c.createExecFifo(); err != nil {
 			return err
 		}
 	}
 	if err := c.start(process, status == Stopped); err != nil {
 		if status == Stopped {
+			// 如果从Stopped状态启动失败，则删除exec fifo
 			c.deleteExecFifo()
 		}
 		return err
@@ -267,10 +273,12 @@ func (c *linuxContainer) Exec() error {
 }
 
 func (c *linuxContainer) exec() error {
+	// 获取exec.fifo的路径
 	path := filepath.Join(c.root, execFifoFilename)
 
 	fifoOpen := make(chan struct{})
 	select {
+	// 等待fifoOpen发来信号，或者子进程变为僵尸进程
 	case <-awaitProcessExit(c.initProcess.pid(), fifoOpen):
 		return errors.New("container process is already dead")
 	case result := <-awaitFifoOpen(path):
@@ -292,6 +300,7 @@ func readFromExecFifo(execFifo io.Reader) error {
 	if err != nil {
 		return err
 	}
+	// 如果没从管道中读取数据，则容器已经处于running的状态
 	if len(data) <= 0 {
 		return fmt.Errorf("cannot start an already running container")
 	}
@@ -320,6 +329,7 @@ func awaitProcessExit(pid int, exit <-chan struct{}) <-chan struct{} {
 func awaitFifoOpen(path string) <-chan openResult {
 	fifoOpened := make(chan openResult)
 	go func() {
+		// 打开管道
 		f, err := os.OpenFile(path, os.O_RDONLY, 0)
 		if err != nil {
 			fifoOpened <- openResult{err: newSystemErrorWithCause(err, "open exec fifo for reading")}
@@ -335,7 +345,9 @@ type openResult struct {
 	err  error
 }
 
+// 如果容器为新创建的，则isInit为true
 func (c *linuxContainer) start(process *Process, isInit bool) error {
+	// 创建parent process
 	parent, err := c.newParentProcess(process, isInit)
 	if err != nil {
 		return newSystemErrorWithCause(err, "creating new parent process")
@@ -348,8 +360,10 @@ func (c *linuxContainer) start(process *Process, isInit bool) error {
 		return newSystemErrorWithCause(err, "starting container process")
 	}
 	// generate a timestamp indicating when the container was started
+	// 创建timestamp，标记容器启动时间
 	c.created = time.Now().UTC()
 	if isInit {
+		// 设置容器的状态为created
 		c.state = &createdState{
 			c: c,
 		}
@@ -360,6 +374,7 @@ func (c *linuxContainer) start(process *Process, isInit bool) error {
 		c.initProcessStartTime = state.InitProcessStartTime
 
 		if c.config.Hooks != nil {
+			// 返回bundle以及用户定义的annotations
 			bundle, annotations := utils.Annotations(c.config.Labels)
 			s := configs.HookState{
 				Version:     c.config.Version,
@@ -369,6 +384,7 @@ func (c *linuxContainer) start(process *Process, isInit bool) error {
 				Annotations: annotations,
 			}
 			for i, hook := range c.config.Hooks.Poststart {
+				// 容器启动完成之后，运行PostStart hook
 				if err := hook.Run(s); err != nil {
 					if err := ignoreTerminateErrors(parent.terminate()); err != nil {
 						logrus.Warn(err)
@@ -378,6 +394,7 @@ func (c *linuxContainer) start(process *Process, isInit bool) error {
 			}
 		}
 	} else {
+		// 如果容器不是第一次启动，标记的状态为running
 		c.state = &runningState{
 			c: c,
 		}
@@ -405,6 +422,7 @@ func (c *linuxContainer) createExecFifo() error {
 		return err
 	}
 
+	// 创建exec fifo文件"exec.fifo"
 	fifoName := filepath.Join(c.root, execFifoFilename)
 	if _, err := os.Stat(fifoName); err == nil {
 		return fmt.Errorf("exec fifo %s already exists", fifoName)
@@ -430,6 +448,9 @@ func (c *linuxContainer) deleteExecFifo() {
 // container cannot access the statedir (and the FIFO itself remains
 // un-opened). It then adds the FifoFd to the given exec.Cmd as an inherited
 // fd, with _LIBCONTAINER_FIFOFD set to its fd number.
+// includeExecFifo打开容器的execfifo作为pathfd
+// 这样容器就不能访问statedir(FIFO依旧保持un-opened)
+// 它将FifoFd加入给定的exec.Cmd作为继承的fd，并且将_LIBCONTAINER_FIFOFD设置为它的fd number
 func (c *linuxContainer) includeExecFifo(cmd *exec.Cmd) error {
 	fifoName := filepath.Join(c.root, execFifoFilename)
 	fifoFd, err := unix.Open(fifoName, unix.O_PATH|unix.O_CLOEXEC, 0)
@@ -448,11 +469,13 @@ func (c *linuxContainer) newParentProcess(p *Process, doInit bool) (parentProces
 	if err != nil {
 		return nil, newSystemErrorWithCause(err, "creating new init pipe")
 	}
+	// 创建子进程的运行模板
 	cmd, err := c.commandTemplate(p, childPipe)
 	if err != nil {
 		return nil, newSystemErrorWithCause(err, "creating new command template")
 	}
 	if !doInit {
+		// 如果为exec命令，则调用c.newSetnsProcess
 		return c.newSetnsProcess(p, cmd, parentPipe, childPipe)
 	}
 
@@ -461,6 +484,9 @@ func (c *linuxContainer) newParentProcess(p *Process, doInit bool) (parentProces
 	// for container rootfs escape (and not doing it in `runc exec` avoided
 	// that problem), but we no longer do that. However, there's no need to do
 	// this for `runc exec` so we just keep it this way to be safe.
+	// 我们只有在不运行`runc exec`的时候才设置fifoFd
+	// 我们这样做的历史原因是，之前我们会传输一个dirfd从而能够让容器的rootfs escapse
+	// 但是现在不需要了
 	if err := c.includeExecFifo(cmd); err != nil {
 		return nil, newSystemErrorWithCause(err, "including execfifo in cmd.Exec setup")
 	}
@@ -479,11 +505,13 @@ func (c *linuxContainer) commandTemplate(p *Process, childPipe *os.File) (*exec.
 	}
 	cmd.ExtraFiles = append(cmd.ExtraFiles, p.ExtraFiles...)
 	if p.ConsoleSocket != nil {
+		// 让子进程获取console socket的信息
 		cmd.ExtraFiles = append(cmd.ExtraFiles, p.ConsoleSocket)
 		cmd.Env = append(cmd.Env,
 			fmt.Sprintf("_LIBCONTAINER_CONSOLE=%d", stdioFdCount+len(cmd.ExtraFiles)-1),
 		)
 	}
+	// 让子进程获取init pipe的信息
 	cmd.ExtraFiles = append(cmd.ExtraFiles, childPipe)
 	cmd.Env = append(cmd.Env,
 		fmt.Sprintf("_LIBCONTAINER_INITPIPE=%d", stdioFdCount+len(cmd.ExtraFiles)-1),
@@ -498,9 +526,11 @@ func (c *linuxContainer) commandTemplate(p *Process, childPipe *os.File) (*exec.
 }
 
 func (c *linuxContainer) newInitProcess(p *Process, cmd *exec.Cmd, parentPipe, childPipe *os.File) (*initProcess, error) {
+	// 设置"_LIBCONTAINER_INITTYPE"为"standard"
 	cmd.Env = append(cmd.Env, "_LIBCONTAINER_INITTYPE="+string(initStandard))
 	nsMaps := make(map[configs.NamespaceType]string)
 	for _, ns := range c.config.Namespaces {
+		// 创建namespace map
 		if ns.Path != "" {
 			nsMaps[ns.Type] = ns.Path
 		}
@@ -1556,6 +1586,7 @@ func (c *linuxContainer) updateState(process parentProcess) (*State, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 创建state file，将state写入
 	err = c.saveState(state)
 	if err != nil {
 		return nil, err
@@ -1738,21 +1769,26 @@ func encodeIDMapping(idMap []configs.IDMap) ([]byte, error) {
 
 // bootstrapData encodes the necessary data in netlink binary format
 // as a io.Reader.
+// bootstrapData将必要的数据编码成netlink binary format，作为一个io.Reader
 // Consumer can write the data to a bootstrap program
+// 用户可以将数据写入一个bootstramp程序
 // such as one that uses nsenter package to bootstrap the container's
 // init process correctly, i.e. with correct namespaces, uid/gid
 // mapping etc.
+// 例如，可以使用nsenter package来正确启动容器的init process
 func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.NamespaceType]string) (io.Reader, error) {
 	// create the netlink message
 	r := nl.NewNetlinkRequest(int(InitMsg), 0)
 
 	// write cloneFlags
+	// 写入cloneFlags
 	r.AddData(&Int32msg{
 		Type:  CloneFlagsAttr,
 		Value: uint32(cloneFlags),
 	})
 
 	// write custom namespace paths
+	// 写入定制的namespace path
 	if len(nsMaps) > 0 {
 		nsPaths, err := c.orderNamespacePaths(nsMaps)
 		if err != nil {

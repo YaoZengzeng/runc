@@ -40,6 +40,9 @@ func needsSetupDev(config *configs.Config) bool {
 // prepareRootfs sets up the devices, mount points, and filesystems for use
 // inside a new mount namespace. It doesn't set anything as ro. You must call
 // finalizeRootfs after this function to finish setting up the rootfs.
+// prepareRootfs创建设备，mount points以及文件系统，用于新的mount namespace
+// 它不会将任何东西设置为只读
+// 我们必须在这个函数之后调用finalizeRootfs用来结束rootfs的设置
 func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	config := iConfig.Config
 	if err := prepareRoot(config); err != nil {
@@ -47,6 +50,7 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	}
 
 	setupDev := needsSetupDev(config)
+	// 配置mounts
 	for _, m := range config.Mounts {
 		for _, precmd := range m.PremountCmds {
 			if err := mountCmd(precmd); err != nil {
@@ -65,6 +69,7 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 		}
 	}
 
+	// 配置dev
 	if setupDev {
 		if err := createDevices(config); err != nil {
 			return newSystemErrorWithCause(err, "creating device nodes")
@@ -81,6 +86,9 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 	// The hooks are run after the mounts are setup, but before we switch to the new
 	// root, so that the old root is still available in the hooks for any mount
 	// manipulations.
+	// 告诉父进程可以运行pre-start hooks
+	// hooks在mounts都已经创建完成之后，但是转变为新的root之前运行
+	// 这样的话，old root在hooks中还存在，可以被用于任何mount manipulations
 	// Note that iConfig.Cwd is not guaranteed to exist here.
 	if err := syncParentHooks(pipe); err != nil {
 		return err
@@ -128,6 +136,7 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig) (err error) {
 
 // finalizeRootfs sets anything to ro if necessary. You must call
 // prepareRootfs first.
+// finalizeRootfs将某些目录设置为只读，必须先调用prepareRootfs
 func finalizeRootfs(config *configs.Config) (err error) {
 	// remount dev as ro if specified
 	for _, m := range config.Mounts {
@@ -142,6 +151,7 @@ func finalizeRootfs(config *configs.Config) (err error) {
 	}
 
 	// set rootfs ( / ) as readonly
+	// 将根文件系统设置为只读
 	if config.Readonlyfs {
 		if err := setReadonly(); err != nil {
 			return newSystemErrorWithCause(err, "setting rootfs as readonly")
@@ -600,6 +610,9 @@ func rootfsParentMountPrivate(rootfs string) error {
 	// reasons. First of all pivot_root() will fail if parent mount is
 	// shared. Secondly when we bind mount rootfs it will propagate to
 	// parent namespace and we don't want that to happen.
+	// 如果parent mount为shared，将其设置为PRIVATE，有以下两个原因：
+	// 1. 如果parent mount是shared，那么pivot_root()会fail
+	// 2. 当我们bind mount到rootfs，它会传播到parent namespace，这不是我们想看到的
 	if sharedMount {
 		return unix.Mount("", parentMount, "", unix.MS_PRIVATE, "")
 	}
@@ -619,6 +632,8 @@ func prepareRoot(config *configs.Config) error {
 	// Make parent mount private to make sure following bind mount does
 	// not propagate in other namespaces. Also it will help with kernel
 	// check pass in pivot_root. (IS_SHARED(new_mnt->mnt_parent))
+	// 将parent mount设置为private，从而确保接下来的bind mount不会传播到其他的
+	// namespace
 	if err := rootfsParentMountPrivate(config.Rootfs); err != nil {
 		return err
 	}

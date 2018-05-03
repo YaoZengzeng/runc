@@ -17,6 +17,7 @@ import (
 
 var execCommand = cli.Command{
 	Name:  "exec",
+	// 在容器中执行一个新的进程
 	Usage: "execute new process inside the container",
 	ArgsUsage: `<container-id> <command> [command options]  || -p process.json <container-id>
 
@@ -32,6 +33,7 @@ following will output a list of processes running in the container:
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "console-socket",
+			// 一个AF_UNIX socket的路径，可以从中接收到一个文件描述符，表示一个console的虚拟终端的master end
 			Usage: "path to an AF_UNIX socket which will receive a file descriptor referencing the master end of the console's pseudoterminal",
 		},
 		cli.StringFlag{
@@ -55,6 +57,7 @@ following will output a list of processes running in the container:
 			Usage: "additional gids",
 		},
 		cli.StringFlag{
+			// 进程也可以通过指定process.json文件进行配置
 			Name:  "process, p",
 			Usage: "path to the process.json",
 		},
@@ -115,6 +118,7 @@ func execProcess(context *cli.Context) (int, error) {
 	if err != nil {
 		return -1, err
 	}
+	// 不能在一个已经停止的容器里运行exec
 	if status == libcontainer.Stopped {
 		return -1, fmt.Errorf("cannot exec a container that has stopped")
 	}
@@ -127,6 +131,7 @@ func execProcess(context *cli.Context) (int, error) {
 	if err != nil {
 		return -1, err
 	}
+	// 获取bundle目录
 	bundle := utils.SearchLabels(state.Config.Labels, "bundle")
 	p, err := getProcess(context, bundle)
 	if err != nil {
@@ -145,6 +150,7 @@ func execProcess(context *cli.Context) (int, error) {
 }
 
 func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
+	// 指定了process的配置文件，则直接读取并返回
 	if path := context.String("process"); path != "" {
 		f, err := os.Open(path)
 		if err != nil {
@@ -158,13 +164,16 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 		return &p, validateProcessSpec(&p)
 	}
 	// process via cli flags
+	// 如果是通过命令行指定的process配置
 	if err := os.Chdir(bundle); err != nil {
 		return nil, err
 	}
+	// 加载config.json中的内容
 	spec, err := loadSpec(specConfig)
 	if err != nil {
 		return nil, err
 	}
+	// 从中获取process的配置，并根据命令行参数进行修改
 	p := spec.Process
 	p.Args = context.Args()[1:]
 	// override the cwd, if passed

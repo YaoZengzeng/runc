@@ -10,15 +10,19 @@ import (
 
 type Manager interface {
 	// Applies cgroup configuration to the process with the specified pid
+	// 将cgroup配置应用到给定的pid上
 	Apply(pid int) error
 
 	// Returns the PIDs inside the cgroup set
+	// 返回cgroup set中的PID
 	GetPids() ([]int, error)
 
 	// Returns the PIDs inside the cgroup set & all sub-cgroups
+	// 返回所有cgroup set以及所有的sub-cgroups的PID
 	GetAllPids() ([]int, error)
 
 	// Returns statistics for the cgroup set
+	// 返回cgroup set的statistics
 	GetStats() (*Stats, error)
 
 	// Toggles the freezer cgroup according with specified state

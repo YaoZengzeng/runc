@@ -7,19 +7,26 @@ type Spec struct {
 	// Version of the Open Container Runtime Specification with which the bundle complies.
 	Version string `json:"ociVersion"`
 	// Process configures the container process.
+	// Process对容器进程进行配置
 	Process *Process `json:"process,omitempty"`
 	// Root configures the container's root filesystem.
+	// Root对容器的根文件系统进行配置
 	Root *Root `json:"root,omitempty"`
 	// Hostname configures the container's hostname.
+	// Hostname对容器的hostname进行配置
 	Hostname string `json:"hostname,omitempty"`
 	// Mounts configures additional mounts (on top of Root).
+	// Mounts对额外的mounts进行配置（在Root的基础之上）
 	Mounts []Mount `json:"mounts,omitempty"`
 	// Hooks configures callbacks for container lifecycle events.
+	// Hooks对容器的lifecycle events的回调函数进行配置
 	Hooks *Hooks `json:"hooks,omitempty" platform:"linux,solaris"`
 	// Annotations contains arbitrary metadata for the container.
+	// Annotations包含了容器额外的元数据
 	Annotations map[string]string `json:"annotations,omitempty"`
 
 	// Linux is platform-specific configuration for Linux based containers.
+	// Linux平台上的容器，针对Linux的特殊配置
 	Linux *Linux `json:"linux,omitempty" platform:"linux"`
 	// Solaris is platform-specific configuration for Solaris based containers.
 	Solaris *Solaris `json:"solaris,omitempty" platform:"solaris"`
@@ -28,31 +35,44 @@ type Spec struct {
 }
 
 // Process contains information to start a specific application inside the container.
+// Process包含了在容器中启动一个特定的应用所需要的信息
 type Process struct {
 	// Terminal creates an interactive terminal for the container.
+	// Terminal为容器创建一个交互式的terminal
 	Terminal bool `json:"terminal,omitempty"`
 	// ConsoleSize specifies the size of the console.
+	// ConsoleSize指定了console的大小
 	ConsoleSize *Box `json:"consoleSize,omitempty"`
 	// User specifies user information for the process.
+	// User指定了进程的用户信息
 	User User `json:"user"`
 	// Args specifies the binary and arguments for the application to execute.
+	// Args指定应用执行的binary以及arguments信息
 	Args []string `json:"args"`
 	// Env populates the process environment for the process.
+	// Env用于填充进程的环境变量
 	Env []string `json:"env,omitempty"`
 	// Cwd is the current working directory for the process and must be
 	// relative to the container's root.
+	// Cwd是容器的当前工作目录，必须是相对于容器的根目录的
 	Cwd string `json:"cwd"`
 	// Capabilities are Linux capabilities that are kept for the process.
+	// 进程的Linux capabilities
 	Capabilities *LinuxCapabilities `json:"capabilities,omitempty" platform:"linux"`
 	// Rlimits specifies rlimit options to apply to the process.
+	// Rlimits指定了施加到进程的rlimit options
+	// 可以指定rlimit的类型，hard limit以及soft limit
 	Rlimits []POSIXRlimit `json:"rlimits,omitempty" platform:"linux,solaris"`
 	// NoNewPrivileges controls whether additional privileges could be gained by processes in the container.
+	// NoNewPrivileges用于控制容器中的进程是否能获取额外的privileges
 	NoNewPrivileges bool `json:"noNewPrivileges,omitempty" platform:"linux"`
 	// ApparmorProfile specifies the apparmor profile for the container.
+	// ApparmorProfile指定了容器的apparmor profile
 	ApparmorProfile string `json:"apparmorProfile,omitempty" platform:"linux"`
 	// Specify an oom_score_adj for the container.
 	OOMScoreAdj *int `json:"oomScoreAdj,omitempty" platform:"linux"`
 	// SelinuxLabel specifies the selinux context that the container process is run as.
+	// SelinuxLabel指定了进程运行的selinux context
 	SelinuxLabel string `json:"selinuxLabel,omitempty" platform:"linux"`
 }
 
@@ -80,6 +100,7 @@ type Box struct {
 }
 
 // User specifies specific user (and group) information for the container process.
+// User指定了容器进程的用户（以及group）信息，包括UID, GID，以及AdditionalGids和user name
 type User struct {
 	// UID is the user id.
 	UID uint32 `json:"uid" platform:"linux,solaris"`
@@ -92,26 +113,32 @@ type User struct {
 }
 
 // Root contains information about the container's root filesystem on the host.
+// Root包含了宿主机上容器的根文件系统包含的信息
 type Root struct {
 	// Path is the absolute path to the container's root filesystem.
+	// Path是容器的根文件系统的绝对路径
 	Path string `json:"path"`
 	// Readonly makes the root filesystem for the container readonly before the process is executed.
+	// Readonly会在进程执行之前让容器的根文件系统变为只读
 	Readonly bool `json:"readonly,omitempty"`
 }
 
 // Mount specifies a mount for a container.
 type Mount struct {
 	// Destination is the absolute path where the mount will be placed in the container.
+	// Destination是容器中的mount会位于的绝对路径
 	Destination string `json:"destination"`
 	// Type specifies the mount kind.
 	Type string `json:"type,omitempty" platform:"linux,solaris"`
 	// Source specifies the source path of the mount.
 	Source string `json:"source,omitempty"`
 	// Options are fstab style mount options.
+	// Options是fstab风格的mount options
 	Options []string `json:"options,omitempty"`
 }
 
 // Hook specifies a command that is run at a particular event in the lifecycle of a container
+// Hook指定了容器生命周期中特定事件发生之后执行的命令
 type Hook struct {
 	Path    string   `json:"path"`
 	Args    []string `json:"args,omitempty"`
@@ -122,16 +149,20 @@ type Hook struct {
 // Hooks for container setup and teardown
 type Hooks struct {
 	// Prestart is a list of hooks to be run before the container process is executed.
+	// Prestart是容器进程执行之前运行的一系列hooks
 	Prestart []Hook `json:"prestart,omitempty"`
 	// Poststart is a list of hooks to be run after the container process is started.
+	// Poststart是容器进程启动之后执行的一系列hooks
 	Poststart []Hook `json:"poststart,omitempty"`
 	// Poststop is a list of hooks to be run after the container process exits.
+	// Poststop是容器进程退出之后执行的一系列hooks
 	Poststop []Hook `json:"poststop,omitempty"`
 }
 
 // Linux contains platform-specific configuration for Linux based containers.
 type Linux struct {
 	// UIDMapping specifies user mappings for supporting user namespaces.
+	// UIDMapping指定了user mappings，为了支持user namespace
 	UIDMappings []LinuxIDMapping `json:"uidMappings,omitempty"`
 	// GIDMapping specifies group mappings for supporting user namespaces.
 	GIDMappings []LinuxIDMapping `json:"gidMappings,omitempty"`
@@ -139,27 +170,38 @@ type Linux struct {
 	Sysctl map[string]string `json:"sysctl,omitempty"`
 	// Resources contain cgroup information for handling resource constraints
 	// for the container
+	// Resources包含了cgroup信息，用于处理容器的资源限制
 	Resources *LinuxResources `json:"resources,omitempty"`
 	// CgroupsPath specifies the path to cgroups that are created and/or joined by the container.
+	// CgroupsPath指定了容器创建或加入时的cgroups路径
 	// The path is expected to be relative to the cgroups mountpoint.
+	// 该路径是相对于cgroups的mountpoint的
 	// If resources are specified, the cgroups at CgroupsPath will be updated based on resources.
+	// 如果指定了resources，位于CgroupsPath的cgroups将根据resources进行更新
 	CgroupsPath string `json:"cgroupsPath,omitempty"`
 	// Namespaces contains the namespaces that are created and/or joined by the container
+	// Namespaces包含了容器要创建或者加入的namespace
 	Namespaces []LinuxNamespace `json:"namespaces,omitempty"`
 	// Devices are a list of device nodes that are created for the container
+	// Devices是为容器创建的一系列device nodes
 	Devices []LinuxDevice `json:"devices,omitempty"`
 	// Seccomp specifies the seccomp security settings for the container.
+	// Seccomp指定了容器的seccomp安全设置
 	Seccomp *LinuxSeccomp `json:"seccomp,omitempty"`
 	// RootfsPropagation is the rootfs mount propagation mode for the container.
+	// RootfsPropagation指定了容器的rootfs的mount propagation
 	RootfsPropagation string `json:"rootfsPropagation,omitempty"`
 	// MaskedPaths masks over the provided paths inside the container.
 	MaskedPaths []string `json:"maskedPaths,omitempty"`
 	// ReadonlyPaths sets the provided paths as RO inside the container.
+	// ReadonlyPaths将容器内指定的目录设置为RO
 	ReadonlyPaths []string `json:"readonlyPaths,omitempty"`
 	// MountLabel specifies the selinux context for the mounts in the container.
+	// MountLabel指定了容器中的mounts的selinux context
 	MountLabel string `json:"mountLabel,omitempty"`
 	// IntelRdt contains Intel Resource Director Technology (RDT) information
 	// for handling resource constraints (e.g., L3 cache) for the container
+	// IntelRdt包含了RDT信息，用于处理容器的resource constraints（比如，L3 cache）
 	IntelRdt *LinuxIntelRdt `json:"intelRdt,omitempty"`
 }
 
@@ -189,6 +231,7 @@ const (
 	// UserNamespace for isolating user and group IDs
 	UserNamespace = "user"
 	// CgroupNamespace for isolating cgroup hierarchies
+	// CgroupNamespace用于隔离cgroup hierarchies
 	CgroupNamespace = "cgroup"
 )
 
@@ -213,6 +256,7 @@ type POSIXRlimit struct {
 }
 
 // LinuxHugepageLimit structure corresponds to limiting kernel hugepages
+// LinuxHugepageLimit用于限制kernel hugepages
 type LinuxHugepageLimit struct {
 	// Pagesize is the hugepage size
 	Pagesize string `json:"pageSize"`
@@ -285,6 +329,7 @@ type LinuxMemory struct {
 	// How aggressive the kernel will swap memory pages.
 	Swappiness *uint64 `json:"swappiness,omitempty"`
 	// DisableOOMKiller disables the OOM killer for out of memory conditions
+	// DisableOOMKiller会在内存超标的情况下禁止OOM killer
 	DisableOOMKiller *bool `json:"disableOOMKiller,omitempty"`
 }
 
@@ -309,6 +354,7 @@ type LinuxCPU struct {
 // LinuxPids for Linux cgroup 'pids' resource management (Linux 4.3)
 type LinuxPids struct {
 	// Maximum number of PIDs. Default is "no limit".
+	// PID的最大值，默认为"no limit"
 	Limit int64 `json:"limit"`
 }
 
@@ -317,16 +363,20 @@ type LinuxNetwork struct {
 	// Set class identifier for container's network packets
 	ClassID *uint32 `json:"classID,omitempty"`
 	// Set priority of network traffic for container
+	// 设置容器网络流量的优先级
 	Priorities []LinuxInterfacePriority `json:"priorities,omitempty"`
 }
 
 // LinuxResources has container runtime resource constraints
 type LinuxResources struct {
 	// Devices configures the device whitelist.
+	// Devices配置device whitelist
 	Devices []LinuxDeviceCgroup `json:"devices,omitempty"`
 	// Memory restriction configuration
+	// 内存资源限制
 	Memory *LinuxMemory `json:"memory,omitempty"`
 	// CPU resource restriction configuration
+	// CPU资源限制
 	CPU *LinuxCPU `json:"cpu,omitempty"`
 	// Task resource restriction configuration.
 	Pids *LinuxPids `json:"pids,omitempty"`
@@ -339,6 +389,7 @@ type LinuxResources struct {
 }
 
 // LinuxDevice represents the mknod information for a Linux special device file
+// LinuxDevice表示一个Linux特定的device file的mknod信息
 type LinuxDevice struct {
 	// Path to the device.
 	Path string `json:"path"`
@@ -488,6 +539,7 @@ type WindowsHyperV struct {
 }
 
 // LinuxSeccomp represents syscall restrictions
+// LinuxSeccomp表示对系统调用的限制
 type LinuxSeccomp struct {
 	DefaultAction LinuxSeccompAction `json:"defaultAction"`
 	Architectures []Arch             `json:"architectures,omitempty"`
@@ -563,6 +615,7 @@ type LinuxSyscall struct {
 
 // LinuxIntelRdt has container runtime resource constraints
 // for Intel RDT/CAT which introduced in Linux 4.10 kernel
+// 本特性在Linux 4.10之后才能使用
 type LinuxIntelRdt struct {
 	// The schema for L3 cache id and capacity bitmask (CBM)
 	// Format: "L3:<cache_id0>=<cbm0>;<cache_id1>=<cbm1>;..."

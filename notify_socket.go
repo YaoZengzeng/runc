@@ -43,9 +43,12 @@ func (ns *notifySocket) Close() error {
 
 // If systemd is supporting sd_notify protocol, this function will add support
 // for sd_notify protocol from within the container.
+// 如果systemd支持sd_notify protocol, 本函数会在函数内提供sd_notify protocol的支持
 func (s *notifySocket) setupSpec(context *cli.Context, spec *specs.Spec) {
 	mount := specs.Mount{Destination: s.host, Type: "bind", Source: s.socketPath, Options: []string{"bind"}}
+	// 添加mounts
 	spec.Mounts = append(spec.Mounts, mount)
+	// 添加环境变量"NOTIFY_SOCKET"
 	spec.Process.Env = append(spec.Process.Env, fmt.Sprintf("NOTIFY_SOCKET=%s", s.host))
 }
 

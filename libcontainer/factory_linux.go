@@ -62,6 +62,8 @@ func SystemdCgroups(l *LinuxFactory) error {
 // Cgroupfs is an options func to configure a LinuxFactory to return
 // containers that use the native cgroups filesystem implementation to
 // create and manage cgroups.
+// Cgroupfs是一个opions func用于配置LinuxFactory
+// 通过原生的cgroups filesystem的实现来创建和管理cgroups
 func Cgroupfs(l *LinuxFactory) error {
 	l.NewCgroupsManager = func(config *configs.Cgroup, paths map[string]string) cgroups.Manager {
 		return &fs.Manager{
@@ -111,6 +113,8 @@ func CriuPath(criupath string) func(*LinuxFactory) error {
 
 // New returns a linux based container factory based in the root directory and
 // configures the factory with the provided option funcs.
+// New返回一个linux based容器的factory，基于root directory
+// 以及给定的option funcs用于配置factory
 func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 	if root != "" {
 		if err := os.MkdirAll(root, 0700); err != nil {
@@ -137,16 +141,20 @@ func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 }
 
 // LinuxFactory implements the default factory interface for linux based systems.
+// LinuxFactory实现了基于linux的系统的默认的factory interface
 type LinuxFactory struct {
 	// Root directory for the factory to store state.
+	// factory用于存储状态的Root目录
 	Root string
 
 	// InitPath is the path for calling the init responsibilities for spawning
 	// a container.
+	// InitPath是生成容器时，用于完成初始化责任的路径
 	InitPath string
 
 	// InitArgs are arguments for calling the init responsibilities for spawning
 	// a container.
+	// InitArgs是生成容器时，用于完成初始化责任的参数
 	InitArgs []string
 
 	// CriuPath is the path to the criu binary used for checkpoint and restore of
@@ -155,19 +163,23 @@ type LinuxFactory struct {
 
 	// New{u,g}uidmapPath is the path to the binaries used for mapping with
 	// rootless containers.
+	// New{u,g}uidmapPath是用于rootless container进行mapping的二进制文件的目录
 	NewuidmapPath string
 	NewgidmapPath string
 
 	// Validator provides validation to container configurations.
+	// Validator用于检测容器的陪住是否正确
 	Validator validate.Validator
 
 	// NewCgroupsManager returns an initialized cgroups manager for a single container.
+	// NewCgroupsManager为单个容器返回一个已经初始化完成的cgroups manager
 	NewCgroupsManager func(config *configs.Cgroup, paths map[string]string) cgroups.Manager
 
 	// NewIntelRdtManager returns an initialized Intel RDT manager for a single container.
 	NewIntelRdtManager func(config *configs.Config, id string, path string) intelrdt.Manager
 }
 
+// Create创建一个容器实例
 func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, error) {
 	if l.Root == "" {
 		return nil, newGenericError(fmt.Errorf("invalid root"), ConfigInvalid)
@@ -180,6 +192,7 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 	}
 	containerRoot := filepath.Join(l.Root, id)
 	if _, err := os.Stat(containerRoot); err == nil {
+		// 根据容器的根目录是否存在，来判断容器是否被创建
 		return nil, newGenericError(fmt.Errorf("container with id exists: %v", id), IdInUse)
 	} else if !os.IsNotExist(err) {
 		return nil, newGenericError(err, SystemError)
@@ -199,11 +212,13 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		criuPath:      l.CriuPath,
 		newuidmapPath: l.NewuidmapPath,
 		newgidmapPath: l.NewgidmapPath,
+		// 创建适当的cgroup manager
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
 	}
 	if intelrdt.IsEnabled() {
 		c.intelRdtManager = l.NewIntelRdtManager(config, id, "")
 	}
+	// 设置容器的初始状态为stopped
 	c.state = &stoppedState{c: c}
 	return c, nil
 }
@@ -252,6 +267,7 @@ func (l *LinuxFactory) Type() string {
 
 // StartInitialization loads a container by opening the pipe fd from the parent to read the configuration and state
 // This is a low level implementation detail of the reexec and should not be consumed externally
+// StartInitialization通过打开来自父进程的pipe fd来读取配置和状态，从而加载容器
 func (l *LinuxFactory) StartInitialization() (err error) {
 	var (
 		pipefd, fifofd int
@@ -262,6 +278,7 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 	)
 
 	// Get the INITPIPE.
+	// pipe为INITPIPE
 	pipefd, err = strconv.Atoi(envInitPipe)
 	if err != nil {
 		return fmt.Errorf("unable to convert _LIBCONTAINER_INITPIPE=%s to int: %s", envInitPipe, err)
@@ -274,6 +291,7 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 	defer pipe.Close()
 
 	// Only init processes have FIFOFD.
+	// 只有init进程有FIFOFD
 	fifofd = -1
 	if it == initStandard {
 		if fifofd, err = strconv.Atoi(envFifoFd); err != nil {
@@ -286,17 +304,21 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 		if err != nil {
 			return fmt.Errorf("unable to convert _LIBCONTAINER_CONSOLE=%s to int: %s", envConsole, err)
 		}
+		// 打开console socket
 		consoleSocket = os.NewFile(uintptr(console), "console-socket")
 		defer consoleSocket.Close()
 	}
 
 	// clear the current process's environment to clean any libcontainer
 	// specific env vars.
+	// 清除当前进程的环境变量，从而清除任何libcontainer相关的环境变量
 	os.Clearenv()
 
 	defer func() {
 		// We have an error during the initialization of the container's init,
 		// send it back to the parent process in the form of an initError.
+		// 如果在容器的init的初始化过程中遇到了错误
+		// 就以initError的形式返回给父进程
 		if werr := utils.WriteJSON(pipe, syncT{procError}); werr != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return
@@ -318,6 +340,7 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 	}
 
 	// If Init succeeds, syscall.Exec will not return, hence none of the defers will be called.
+	// 如果Init成功，syscall.Exec不会返回，因此不会有defer函数执行
 	return i.Init()
 }
 

@@ -32,6 +32,8 @@ func (t *tty) copyIO(w io.Writer, r io.ReadCloser) {
 
 // setup pipes for the process so that advanced features like c/r are able to easily checkpoint
 // and restore the process's IO without depending on a host specific path or device
+// 为进程设置pipes，这样一些高级特性像c/r，就能很容易地checkpoint以及restore进程的IO而不需要依赖宿主机特定的
+// 目录或者设备
 func setupProcessPipes(p *libcontainer.Process, rootuid, rootgid int) (*tty, error) {
 	i, err := p.InitializeIO(rootuid, rootgid)
 	if err != nil {
@@ -90,11 +92,14 @@ func (t *tty) recvtty(process *libcontainer.Process, socket *os.File) error {
 		return err
 	}
 	go epoller.Wait()
+	// 从Stdin拷贝到epollConsole
 	go io.Copy(epollConsole, os.Stdin)
 	t.wg.Add(1)
+	// 从epollConsole拷贝到Stdout
 	go t.copyIO(os.Stdout, epollConsole)
 
 	// set raw mode to stdin and also handle interrupt
+	// 设置stdin为raw mode，同时处理interrupt
 	stdin, err := console.ConsoleFromFile(os.Stdin)
 	if err != nil {
 		return err
@@ -115,6 +120,7 @@ func handleInterrupt(c console.Console) {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, os.Interrupt)
 	<-sigchan
+	// 收到信号之后，对console进行重置
 	c.Reset()
 	os.Exit(0)
 }

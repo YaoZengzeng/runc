@@ -28,6 +28,7 @@ import (
 var errEmptyID = errors.New("container id cannot be empty")
 
 // loadFactory returns the configured factory instance for execing containers.
+// loadFactory返回一个配置好的factory实例用于execing容器
 func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
 	root := context.GlobalString("root")
 	abs, err := filepath.Abs(root)
@@ -37,6 +38,7 @@ func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
 
 	// We default to cgroupfs, and can only use systemd if the system is a
 	// systemd box.
+	// 创建cgroup manager，默认为systemd-cgroup
 	cgroupManager := libcontainer.Cgroupfs
 	if context.GlobalBool("systemd-cgroup") {
 		if systemd.UseSystemd() {
@@ -54,6 +56,7 @@ func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
 	// We resolve the paths for {newuidmap,newgidmap} from the context of runc,
 	// to avoid doing a path lookup in the nsexec context. TODO: The binary
 	// names are not currently configurable.
+	// newuidmap和newgidmap的绝对路径
 	newuidmap, err := exec.LookPath("newuidmap")
 	if err != nil {
 		newuidmap = ""
@@ -97,6 +100,7 @@ func getDefaultImagePath(context *cli.Context) string {
 
 // newProcess returns a new libcontainer Process with the arguments from the
 // spec and stdio from the current process.
+// newProcess返回一个新的libcontainer Process，根据参数spec以及当前进程的stdio
 func newProcess(p specs.Process) (*libcontainer.Process, error) {
 	lp := &libcontainer.Process{
 		Args: p.Args,
@@ -126,6 +130,7 @@ func newProcess(p specs.Process) (*libcontainer.Process, error) {
 		lp.AdditionalGroups = append(lp.AdditionalGroups, strconv.FormatUint(uint64(gid), 10))
 	}
 	for _, rlimit := range p.Rlimits {
+		// 转换容器的资源配置
 		rl, err := createLibContainerRlimit(rlimit)
 		if err != nil {
 			return nil, err
@@ -142,17 +147,21 @@ func destroy(container libcontainer.Container) {
 }
 
 // setupIO modifies the given process config according to the options.
+// setupIO根据options修改给定的process config
 func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, detach bool, sockpath string) (*tty, error) {
 	if createTTY {
+		// 如果创建tty
 		process.Stdin = nil
 		process.Stdout = nil
 		process.Stderr = nil
 		t := &tty{}
 		if !detach {
+			// 如果detach
 			parent, child, err := utils.NewSockPair("console")
 			if err != nil {
 				return nil, err
 			}
+			// 将process的ConsoleSocket设置为child
 			process.ConsoleSocket = child
 			t.postStart = append(t.postStart, parent, child)
 			t.consoleC = make(chan error, 1)
@@ -164,6 +173,7 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 			}()
 		} else {
 			// the caller of runc will handle receiving the console master
+			// runc的调用者会负责处理接收console master
 			conn, err := net.Dial("unix", sockpath)
 			if err != nil {
 				return nil, err
@@ -184,12 +194,15 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 	}
 	// when runc will detach the caller provides the stdio to runc via runc's 0,1,2
 	// and the container's process inherits runc's stdio.
+	// 指定了detach，则会继承runc的stdio
 	if detach {
+		// 将os.Stdio直接赋值给process.Stdio
 		if err := inheritStdio(process); err != nil {
 			return nil, err
 		}
 		return &tty{}, nil
 	}
+	// 没指定tty也没指定detach
 	return setupProcessPipes(process, rootuid, rootgid)
 }
 
@@ -223,12 +236,14 @@ func isRootless() bool {
 }
 
 func createContainer(context *cli.Context, id string, spec *specs.Spec) (libcontainer.Container, error) {
+	// 创建libcontainer config
 	config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
 		CgroupName:       id,
 		UseSystemdCgroup: context.GlobalBool("systemd-cgroup"),
 		NoPivotRoot:      context.Bool("no-pivot"),
 		NoNewKeyring:     context.Bool("no-new-keyring"),
 		Spec:             spec,
+		// 判断当前进程是否为root
 		Rootless:         isRootless(),
 	})
 	if err != nil {
@@ -250,7 +265,9 @@ type runner struct {
 	preserveFDs     int
 	pidFile         string
 	consoleSocket   string
+	// runner保存了libcontainer格式的Container
 	container       libcontainer.Container
+	// runner保存了要采取的action，
 	action          CtAct
 	notifySocket    *notifySocket
 	criuOpts        *libcontainer.CriuOpts
@@ -261,17 +278,21 @@ func (r *runner) run(config *specs.Process) (int, error) {
 		r.destroy()
 		return -1, err
 	}
+	// 将spec的Process转换为libcontainer的Process
 	process, err := newProcess(*config)
 	if err != nil {
 		r.destroy()
 		return -1, err
 	}
 	if len(r.listenFDs) > 0 {
+		// 设置listen fds
 		process.Env = append(process.Env, fmt.Sprintf("LISTEN_FDS=%d", len(r.listenFDs)), "LISTEN_PID=1")
+		// 添加extra files
 		process.ExtraFiles = append(process.ExtraFiles, r.listenFDs...)
 	}
 	baseFd := 3 + len(process.ExtraFiles)
 	for i := baseFd; i < baseFd+r.preserveFDs; i++ {
+		// 将PreserveFD加入extra files
 		process.ExtraFiles = append(process.ExtraFiles, os.NewFile(uintptr(i), "PreserveFD:"+strconv.Itoa(i)))
 	}
 	rootuid, err := r.container.Config().HostRootUID()
@@ -285,12 +306,17 @@ func (r *runner) run(config *specs.Process) (int, error) {
 		return -1, err
 	}
 	var (
+		// 当action为CREATE时，默认为detach
 		detach = r.detach || (r.action == CT_ACT_CREATE)
 	)
 	// Setting up IO is a two stage process. We need to modify process to deal
 	// with detaching containers, and then we get a tty after the container has
 	// started.
+	// 设置IO分为两个阶段
+	// 我们需要修改process用于处理detaching container
+	// 之后我们在容器启动之后获取一个tty
 	handler := newSignalHandler(r.enableSubreaper, r.notifySocket)
+	// 设置process的Stdin, Stdout和Stderr
 	tty, err := setupIO(process, rootuid, rootgid, config.Terminal, detach, r.consoleSocket)
 	if err != nil {
 		r.destroy()
@@ -299,6 +325,7 @@ func (r *runner) run(config *specs.Process) (int, error) {
 	defer tty.Close()
 
 	switch r.action {
+	// 根据action，创建，恢复或者运行容器
 	case CT_ACT_CREATE:
 		err = r.container.Start(process)
 	case CT_ACT_RESTORE:
@@ -334,6 +361,7 @@ func (r *runner) run(config *specs.Process) (int, error) {
 		r.terminate(process)
 	}
 	if detach {
+		// 如果为detach，直接返回
 		return 0, nil
 	}
 	r.destroy()
@@ -352,17 +380,22 @@ func (r *runner) terminate(p *libcontainer.Process) {
 }
 
 func (r *runner) checkTerminal(config *specs.Process) error {
+	// 当action为CT_ACT_CREATE时，detach也为true
 	detach := r.detach || (r.action == CT_ACT_CREATE)
 	// Check command-line for sanity.
+	// 如果容器设置了detach并且没有指定console，则不能获取tty
 	if detach && config.Terminal && r.consoleSocket == "" {
 		return fmt.Errorf("cannot allocate tty if runc will detach without setting console socket")
 	}
+	// 如果容器没有detach或者没有设置terminal，就不能设置console
 	if (!detach || !config.Terminal) && r.consoleSocket != "" {
 		return fmt.Errorf("cannot use console socket if runc will not detach or allocate tty")
 	}
 	return nil
 }
 
+// spec中的Cwd不能为空且必须为绝对路径
+// 且spec的Args不能为空
 func validateProcessSpec(spec *specs.Process) error {
 	if spec.Cwd == "" {
 		return fmt.Errorf("Cwd property must not be empty")
@@ -390,17 +423,20 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 		return -1, errEmptyID
 	}
 
+	// 创建notify socket，如果指定了"NOTIFY_SOCKET"
 	notifySocket := newNotifySocket(context, os.Getenv("NOTIFY_SOCKET"), id)
 	if notifySocket != nil {
 		notifySocket.setupSpec(context, spec)
 	}
 
+	// 创建container数据结构
 	container, err := createContainer(context, id, spec)
 	if err != nil {
 		return -1, err
 	}
 
 	if notifySocket != nil {
+		// 启动notify socket进行监听
 		err := notifySocket.setupSocket()
 		if err != nil {
 			return -1, err
@@ -408,12 +444,15 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 	}
 
 	// Support on-demand socket activation by passing file descriptors into the container init process.
+	// 通过将文件描述符传递给容器的init process来支持on-demand套接字激活
 	listenFDs := []*os.File{}
 	if os.Getenv("LISTEN_FDS") != "" {
 		listenFDs = activation.Files(false)
 	}
+	// 创建runner对象
 	r := &runner{
 		enableSubreaper: !context.Bool("no-subreaper"),
+		// 需要destroy
 		shouldDestroy:   true,
 		container:       container,
 		listenFDs:       listenFDs,
@@ -422,6 +461,7 @@ func startContainer(context *cli.Context, spec *specs.Spec, action CtAct, criuOp
 		detach:          context.Bool("detach"),
 		pidFile:         context.String("pid-file"),
 		preserveFDs:     context.Int("preserve-fds"),
+		// Create，Run还是Restore
 		action:          action,
 		criuOpts:        criuOpts,
 	}

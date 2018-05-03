@@ -38,6 +38,8 @@ var oobSpace = unix.CmsgSpace(4)
 // RecvFd waits for a file descriptor to be sent over the given AF_UNIX
 // socket. The file name of the remote file descriptor will be recreated
 // locally (it is sent as non-auxiliary data in the same payload).
+// RecvFd从给定的AF_UNIX socket获取发送过来的文件描述符
+// 远程文件描述符的文件名会被重新创建
 func RecvFd(socket *os.File) (*os.File, error) {
 	// For some reason, unix.Recvmsg uses the length rather than the capacity
 	// when passing the msg_controllen and other attributes to recvmsg.  So we

@@ -228,6 +228,8 @@ func (p *initProcess) externalDescriptors() []string {
 // because setns support requires the C process to fork off a child and perform the setns
 // before the go runtime boots, we wait on the process to die and receive the child's pid
 // over the provided pipe.
+// 因为setns需要C进程fork一个子进程，然后再go runtime启动前执行setns
+// 我们等待该进程消亡，并且通过管道获取子进程的pid
 // This is called by initProcess.start function
 func (p *initProcess) execSetns() error {
 	status, err := p.cmd.Process.Wait()
@@ -240,12 +242,14 @@ func (p *initProcess) execSetns() error {
 		return &exec.ExitError{ProcessState: status}
 	}
 	var pid *pid
+	// 获取第一个子进程的pid
 	if err := json.NewDecoder(p.parentPipe).Decode(&pid); err != nil {
 		p.cmd.Wait()
 		return err
 	}
 
 	// Clean up the zombie parent process
+	// 清除第一个子进程
 	firstChildProcess, err := os.FindProcess(pid.PidFirstChild)
 	if err != nil {
 		return err
@@ -254,6 +258,7 @@ func (p *initProcess) execSetns() error {
 	// Ignore the error in case the child has already been reaped for any reason
 	_, _ = firstChildProcess.Wait()
 
+	// 找到真正的子进程
 	process, err := os.FindProcess(pid.Pid)
 	if err != nil {
 		return err
@@ -265,6 +270,7 @@ func (p *initProcess) execSetns() error {
 
 func (p *initProcess) start() error {
 	defer p.parentPipe.Close()
+	// 启动子进程
 	err := p.cmd.Start()
 	p.process.ops = p
 	p.childPipe.Close()
@@ -275,6 +281,7 @@ func (p *initProcess) start() error {
 	// Do this before syncing with child so that no children can escape the
 	// cgroup. We don't need to worry about not doing this and not being root
 	// because we'd be using the rootless cgroup manager in that case.
+	// 在和子进程同步前设置cgroup，这样就没有子进程能逃脱了
 	if err := p.manager.Apply(p.pid()); err != nil {
 		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
 	}
@@ -293,6 +300,7 @@ func (p *initProcess) start() error {
 		}
 	}()
 
+	// 将bootstrapData的数据写入pipe
 	if _, err := io.Copy(p.parentPipe, p.bootstrapData); err != nil {
 		return newSystemErrorWithCause(err, "copying bootstrap data to pipe")
 	}
@@ -304,6 +312,9 @@ func (p *initProcess) start() error {
 	// Save the standard descriptor names before the container process
 	// can potentially move them (e.g., via dup2()).  If we don't do this now,
 	// we won't know at checkpoint time which file descriptor to look up.
+	// 在容器进程移动（通过dup2()）standard descriptor之前，保存它
+	// 否则我们不能在checkpoint的时候知道该找哪个文件描述符
+	// p.pid()为子进程的pid
 	fds, err := getPipeFds(p.pid())
 	if err != nil {
 		return newSystemErrorWithCausef(err, "getting pipe fds for pid %d", p.pid())
@@ -325,10 +336,13 @@ func (p *initProcess) start() error {
 		case procReady:
 			// set rlimits, this has to be done here because we lose permissions
 			// to raise the limits once we enter a user-namespace
+			// 设置rlimits，这必须在这里完成，因为一旦我们进入user-namespace之后
+			// 就会失去权限
 			if err := setupRlimits(p.config.Rlimits, p.pid()); err != nil {
 				return newSystemErrorWithCause(err, "setting rlimits for ready process")
 			}
 			// call prestart hooks
+			// 调用prestart hooks
 			if !p.config.Config.Namespaces.Contains(configs.NEWNS) {
 				// Setup cgroup before prestart hook, so that the prestart hook could apply cgroup permissions.
 				if err := p.manager.Set(p.config.Config); err != nil {
@@ -363,6 +377,7 @@ func (p *initProcess) start() error {
 			sentRun = true
 		case procHooks:
 			// Setup cgroup before prestart hook, so that the prestart hook could apply cgroup permissions.
+			// 首先设置cgroup
 			if err := p.manager.Set(p.config.Config); err != nil {
 				return newSystemErrorWithCause(err, "setting cgroup config for procHooks process")
 			}
@@ -380,6 +395,7 @@ func (p *initProcess) start() error {
 					Bundle:      bundle,
 					Annotations: annotations,
 				}
+				// 执行hooks
 				for i, hook := range p.config.Config.Hooks.Prestart {
 					if err := hook.Run(s); err != nil {
 						return newSystemErrorWithCausef(err, "running prestart hook %d", i)
@@ -404,6 +420,7 @@ func (p *initProcess) start() error {
 	if p.config.Config.Namespaces.Contains(configs.NEWNS) && !sentResume {
 		return newSystemError(fmt.Errorf("could not synchronise after executing prestart hooks with container process"))
 	}
+	// 关闭init pipe
 	if err := unix.Shutdown(int(p.parentPipe.Fd()), unix.SHUT_WR); err != nil {
 		return newSystemErrorWithCause(err, "shutting down init pipe")
 	}
@@ -446,6 +463,7 @@ func (p *initProcess) startTime() (uint64, error) {
 
 func (p *initProcess) sendConfig() error {
 	// send the config to the container's init process, we don't use JSON Encode
+	// 将配置发送给容器的init process，此处并不使用JSON进行编码
 	// here because there might be a problem in JSON decoder in some cases, see:
 	// https://github.com/docker/docker/issues/14203#issuecomment-174177790
 	return utils.WriteJSON(p.parentPipe, p.config)
@@ -506,6 +524,8 @@ func getPipeFds(pid int) ([]string, error) {
 // InitializeIO creates pipes for use with the process's stdio and returns the
 // opposite side for each. Do not use this if you want to have a pseudoterminal
 // set up for you by libcontainer (TODO: fix that too).
+// InitializeIO创建pipes用于进程的stdio，并且返回每一个的opposite side
+// 如果你想要libcontainer为你设置pseudoterminal，则不用使用此函数
 // TODO: This is mostly unnecessary, and should be handled by clients.
 func (p *Process) InitializeIO(rootuid, rootgid int) (i *IO, err error) {
 	var fds []uintptr
