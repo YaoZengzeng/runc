@@ -320,6 +320,7 @@ func (p *initProcess) start() error {
 		return newSystemErrorWithCausef(err, "getting pipe fds for pid %d", p.pid())
 	}
 	p.setExternalDescriptors(fds)
+	// 对网络进行配置
 	if err := p.createNetworkInterfaces(); err != nil {
 		return newSystemErrorWithCause(err, "creating network interfaces")
 	}
@@ -342,7 +343,7 @@ func (p *initProcess) start() error {
 				return newSystemErrorWithCause(err, "setting rlimits for ready process")
 			}
 			// call prestart hooks
-			// 调用prestart hooks
+			// 调用prestart hooks，如果容器不包含新的mount namespace的话
 			if !p.config.Config.Namespaces.Contains(configs.NEWNS) {
 				// Setup cgroup before prestart hook, so that the prestart hook could apply cgroup permissions.
 				if err := p.manager.Set(p.config.Config); err != nil {

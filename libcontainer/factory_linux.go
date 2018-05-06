@@ -123,6 +123,7 @@ func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 	}
 	l := &LinuxFactory{
 		Root:      root,
+		// 容器的init进程，路径为"/proc/self/exec"
 		InitPath:  "/proc/self/exe",
 		InitArgs:  []string{os.Args[0], "init"},
 		Validator: validate.New(),
@@ -207,6 +208,7 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		id:            id,
 		root:          containerRoot,
 		config:        config,
+		// 用factory的InitPath和InitArgs进行初始化
 		initPath:      l.InitPath,
 		initArgs:      l.InitArgs,
 		criuPath:      l.CriuPath,
@@ -286,6 +288,7 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 
 	var (
 		pipe = os.NewFile(uintptr(pipefd), "pipe")
+		// 判断是`runc create`还是`runc exec`
 		it   = initType(os.Getenv("_LIBCONTAINER_INITTYPE"))
 	)
 	defer pipe.Close()

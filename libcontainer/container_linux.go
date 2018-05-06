@@ -260,6 +260,7 @@ func (c *linuxContainer) Run(process *Process) error {
 	if err := c.Start(process); err != nil {
 		return err
 	}
+	// 当容器的状态为stopped时，执行exec
 	if status == Stopped {
 		return c.exec()
 	}
@@ -546,6 +547,7 @@ func (c *linuxContainer) newInitProcess(p *Process, cmd *exec.Cmd, parentPipe, c
 		parentPipe:      parentPipe,
 		manager:         c.cgroupManager,
 		intelRdtManager: c.intelRdtManager,
+		// 将process结构填充至initConfig结构中
 		config:          c.newInitConfig(p),
 		container:       c,
 		process:         p,
