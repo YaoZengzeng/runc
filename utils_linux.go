@@ -156,7 +156,7 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 		process.Stderr = nil
 		t := &tty{}
 		if !detach {
-			// 如果detach
+			// 如果不是detach，创建名为"console"的SocketPair
 			parent, child, err := utils.NewSockPair("console")
 			if err != nil {
 				return nil, err
@@ -173,6 +173,7 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 			}()
 		} else {
 			// the caller of runc will handle receiving the console master
+			// 如果设置了detach
 			// runc的调用者会负责处理接收console master
 			conn, err := net.Dial("unix", sockpath)
 			if err != nil {

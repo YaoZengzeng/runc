@@ -78,6 +78,7 @@ func (p *setnsProcess) start() (err error) {
 		return newSystemErrorWithCause(err, "starting setns process")
 	}
 	if p.bootstrapData != nil {
+		// 将bootstrap data写入init管道
 		if _, err := io.Copy(p.parentPipe, p.bootstrapData); err != nil {
 			return newSystemErrorWithCause(err, "copying bootstrap data to pipe")
 		}
@@ -101,6 +102,8 @@ func (p *setnsProcess) start() (err error) {
 	}
 	// set rlimits, this has to be done here because we lose permissions
 	// to raise the limits once we enter a user-namespace
+	// 设置rlimits,一旦我们进入user-namespace后，我们就没有权限设置limits了
+	// 因此，需要在这里完成
 	if err := setupRlimits(p.config.Rlimits, p.pid()); err != nil {
 		return newSystemErrorWithCause(err, "setting rlimits for process")
 	}
@@ -110,6 +113,7 @@ func (p *setnsProcess) start() (err error) {
 
 	ierr := parseSync(p.parentPipe, func(sync *syncT) error {
 		switch sync.Type {
+		// 在exec时，不应该收到procReady, procHooks信息
 		case procReady:
 			// This shouldn't happen.
 			panic("unexpected procReady in setns")
@@ -539,6 +543,7 @@ func (p *Process) InitializeIO(rootuid, rootgid int) (i *IO, err error) {
 			}
 		}
 	}()
+	// 创建三个pipes，用于stdio
 	// STDIN
 	r, w, err := os.Pipe()
 	if err != nil {

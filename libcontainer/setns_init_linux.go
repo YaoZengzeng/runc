@@ -29,6 +29,7 @@ func (l *linuxSetnsInit) getSessionRingName() string {
 }
 
 func (l *linuxSetnsInit) Init() error {
+	// 根据配置对进程进行设置
 	if !l.config.Config.NoNewKeyring {
 		// do not inherit the parent's session keyring
 		if _, err := keys.JoinSessionKeyring(l.getSessionRingName()); err != nil {
@@ -73,5 +74,6 @@ func (l *linuxSetnsInit) Init() error {
 			return newSystemErrorWithCause(err, "init seccomp")
 		}
 	}
+	// 直接exec用户进程
 	return system.Execv(l.config.Args[0], l.config.Args[0:], os.Environ())
 }

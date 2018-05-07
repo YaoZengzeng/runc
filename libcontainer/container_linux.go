@@ -557,6 +557,7 @@ func (c *linuxContainer) newInitProcess(p *Process, cmd *exec.Cmd, parentPipe, c
 }
 
 func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, parentPipe, childPipe *os.File) (*setnsProcess, error) {
+	// 创建init类型为setns
 	cmd.Env = append(cmd.Env, "_LIBCONTAINER_INITTYPE="+string(initSetns))
 	state, err := c.currentState()
 	if err != nil {
@@ -564,12 +565,15 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, parentPipe, 
 	}
 	// for setns process, we don't have to set cloneflags as the process namespaces
 	// will only be set via setns syscall
+	// 对于setns process，我们不需要设置cloneflags
+	// 因为进程的namespaces只会通过setns系统调用被设置
 	data, err := c.bootstrapData(0, state.NamespacePaths)
 	if err != nil {
 		return nil, err
 	}
 	return &setnsProcess{
 		cmd:           cmd,
+		// 获取cgroup manager对应的path
 		cgroupPaths:   c.cgroupManager.GetPaths(),
 		intelRdtPath:  state.IntelRdtPath,
 		childPipe:     childPipe,

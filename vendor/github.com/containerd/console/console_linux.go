@@ -23,6 +23,7 @@ const (
 // Example usage of Epoller and EpollConsole can be as follow:
 //
 //	epoller, _ := NewEpoller()
+//	将console加入epoller中
 //	epollConsole, _ := epoller.Add(console)
 //	go epoller.Wait()
 //	var (

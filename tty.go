@@ -56,6 +56,7 @@ func setupProcessPipes(p *libcontainer.Process, rootuid, rootgid int) (*tty, err
 			t.postStart = append(t.postStart, c)
 		}
 	}
+	// 连接os的Stdio和i的Stdio
 	go func() {
 		io.Copy(i.Stdin, os.Stdin)
 		i.Stdin.Close()
@@ -74,10 +75,12 @@ func inheritStdio(process *libcontainer.Process) error {
 }
 
 func (t *tty) recvtty(process *libcontainer.Process, socket *os.File) error {
+	// 从SocketPipe中获取master fd
 	f, err := utils.RecvFd(socket)
 	if err != nil {
 		return err
 	}
+	// 根据fd创建console
 	cons, err := console.ConsoleFromFile(f)
 	if err != nil {
 		return err
